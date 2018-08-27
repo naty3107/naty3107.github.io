@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Display a map</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.48.0/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.48.0/mapbox-gl.css' rel='stylesheet' />
+	
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+	
+    <style>
+        body { margin:0; padding:0; }
+		#map-container {
+			height:600px;
+			padding-left:5%;
+			padding-right:5%;
+		}
+		
+        #map { 
+			position:relative; width:100%; height:100%; overflow:hidden; touch-action:none;		
+		}
+		
+		.mapboxgl-popup {
+			max-width: 400px;
+			font: 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+    	}
+		
+		#sidebar{
+			padding:5%;
+		}
+		
+    </style>
+</head>
+<body>
+
+<script>
+	
+	$(document).ready(function(){
+		
+		mapboxgl.accessToken = 'pk.eyJ1IjoibmF0eTEzMzciLCJhIjoiY2psNTY2dG1qMmppejNybG1iaGJvOW9mNyJ9._c6IGz6LfNjStoXQq-zrUw';
+		var cpField = $(".cp-input");
+		var submitButton=$(".submit");
+		var clearButton=$(".clear");
+		
+		var coords=[[0,0],[1.2543333333333333, 103.81786111111111],
+		[1.2533888888888889, 103.81888888888888],
+		[1.2498888888888888, 103.82447222222221],
+		[1.2475, 103.82444444444444],
+		[1.255472222222222, 103.8128611111111],
+		[1.246388888888889, 103.84252777777778],
+		[1.2546111111111111, 103.81961111111112],
+		[1.2577222222222222, 103.82341666666666],
+		[1.2558055555555556, 103.82041666666666],
+		[1.251, 103.8341111111111],
+		[1.2570833333333333, 103.82130555555555],
+		[1.2563055555555556, 103.82313888888889],
+		[1.2472777777777777, 103.82247222222222],
+		[1.2565833333333334, 103.82302777777777],
+		[1.2481111111111112, 103.82663888888888],
+		[1.2479166666666668, 103.8213611111111],
+		[1.2508055555555557, 103.81966666666666],
+		[1.2408333333333335, 103.83047222222223],
+		[1.2521111111111112, 103.81802777777777],
+		[1.258, 103.82163888888888],
+		[1.258111111111111, 103.81080555555555],
+		[1.2535, 103.82024999999999],
+		[1.2585555555555554, 103.80919444444444],
+		[1.2516666666666667, 103.81683333333334],
+		[1.2515833333333333, 103.8183611111111],
+		[1.2508888888888887, 103.82527777777777],
+		[1.2512222222222222, 103.82019444444444]]
+		
+		var routeData={
+			type: "FeatureCollection",
+			features:[]
+		}
+					
+		
+		var map = new mapboxgl.Map({
+			container: 'map', // container id
+			style: 'mapbox://styles/mapbox/streets-v9', // stylesheet location
+			center: [103.83, 1.25], // starting position [lng, lat]
+			zoom: 13 // starting zoom
+		});
+		
+		/*
+		function loadMarker(lng, lat){
+			// Image: An image is loaded and added to the map. 
+			  map.loadImage("https://i.imgur.com/MK4NUzI.png", function(error, image) {
+				  if (error) throw error;
+				  map.addImage("custom-marker", image);
+				  // Style layer: A style layer ties together the source and image and specifies how they are displayed on the map. 
+				  map.addLayer({
+					id: "markers",
+					type: "symbol",
+					// Source: A data source specifies the geographic coordinate where the image marker gets placed. 
+					source: {
+					  type: "geojson",
+					  data: routeData,
+					layout: {
+					  "icon-image": "custom-marker",
+					}
+				  }});
+				});
+			
+		}
+					  */
+		
+		function mgr(coord){
+			x = 111439.470923771*(coord[1]) - 11543132.1445949
+			y = 110870.631752153*(coord[0]) - 112781.652488995
+			return [y, x]
+		}
+		
+		function triangleArea(p, q, r){
+			var foo = mgr(p); py = foo[0]; px = foo[1]
+			var foo = mgr(q); qy = foo[0]; qx = foo[1]
+			var foo = mgr(r); ry = foo[0]; rx = foo[1]
+			return 0.5*Math.abs(((px-rx)*(qy-py)-(px-qx)*(ry-py)))
+		}
+		
+		function distSq(p1, p2){
+			return Math.pow((p1[1]-p2[1]),2) + Math.pow((p1[0]-p2[0]),2);
+		}
+		
+		function orientation(p, q, r){
+			val = (q[0]-p[0])*(r[1]-q[1])-(q[1]-p[1])*(r[0]-q[0]);
+			if(val==0){return 0;}//collinear
+			else if(val>0){return 1;}//clockwise
+			else{return 2;}//counterclockwise
+		}
+		
+		function compare(p0, p1, p2){
+			o = orientation(p0, p1, p2);
+			if(o==0){
+				if(distSq(p0, p2)>=distSq(p0, p1)){
+					return false;
+				} else {
+					return true;
+				}
+			}else if(o == 2){
+				return false;
+			}else{
+				return true;
+			}
+		}
+			
+		
+		function pointsortb(p0, points){
+			//sorts set of points wrt p0
+	
+			if(points.length == 0){
+				return []
+			}			
+			
+			var pivots = []
+			var less = []
+			var great =[]
+			
+			for(var p=0; p<points.length; p++){
+				
+				if(points[p]==points[0]){
+					pivots.push(points[p]);
+				}else{
+					if(compare(p0, points[p], points[0])){
+						
+						less.push(points[p]);
+					}else{
+						great.push(points[p]);
+					}
+				}
+			}
+			
+			bar = pointsortb(p0, less).concat(pivots, pointsortb(p0, great))
+			
+			return bar
+		}
+			
+			
+		
+		
+		function pointsort(points){
+			console.log(points[0])
+			return [points[0]].concat(pointsortb(points[0], points.slice(1,points.length)));
+		}
+		
+		function computeArea(t){
+			var minportal = [1000000000, 100000000];				
+			var minportalindex = 0;
+			
+			console.log(t);			
+			
+			
+			var tempportals = []
+			for(var i=0;i<t.length;i++){
+				tempportals.push(coords[t[i]]);
+			}				
+			
+			
+			for(var i=0;i<t.length;i++){
+				var p=tempportals[i];
+				
+				if((p[0] < minportal[0]) || (p[0] == minportal[0] && p[1] < minportal[1])){
+					console.log(p)
+					minportalindex = i;
+					minportal = p;					
+				}
+			}
+			
+			console.log("tempportals:")
+			console.log(tempportals)
+		
+			tempportals[minportalindex] = tempportals[0]
+			tempportals[0] = minportal 
+			
+			console.log("tempportals:")
+			console.log(tempportals)
+			tempportals = pointsort(tempportals);
+			console.log("Sorted Portals:");
+			console.log(tempportals);
+			
+			origin = tempportals[0]
+			prev = tempportals[1]
+			for(var i=2;i<tempportals.length;i++){
+				if(!orientation(origin, prev, tempportals[i])){
+				   tempportals.splice(i,1)
+				}
+			}
+			
+			
+
+			if(tempportals.length<3){
+				return 0
+			}
+			
+			var S = tempportals.slice(0,3)
+			for(var i=3;i<tempportals.length;i++){
+				while(orientation(S[S.length-2],S[S.length-1],tempportals[i])!=1){
+					S.pop()
+				}
+				S.push(tempportals[i])
+			}
+			
+			console.log(S)
+			var area = 0
+			for(var i=2;i<S.length;i++){				
+				area = area+ triangleArea(S[0],S[i-1],S[i])
+			
+			}
+			inner = tempportals.length - S.length;
+			return [area, inner]
+		}
+		
+		function addMarker(n){
+			lng = coords[n][1];
+			lat = coords[n][0];
+			var coordStr = lat.toString() + ", " + lng.toString()
+			routeData.features.push({"type":"Feature","geometry":{"type":"Point","coordinates":[lng, lat]},"properties":{"id":n,"description":coordStr}});
+			console.log(routeData);
+			map.getSource('markers').setData(routeData);
+		}
+		
+		function clearMarkers(){
+			routeData={
+				type: "FeatureCollection",
+				features:[]
+			}
+			map.getSource('markers').setData(routeData);
+		}
+		
+		
+		submitButton.on("click", function(e){			
+			
+			//t = cpField.value;
+			var value = cpField.val();
+			var t = value.split(",");
+			
+			for(var i = 0; i<t.length; i++){
+				addMarker(parseInt(t[i]));
+				t[i] = parseInt(t[i]);
+			}		
+			
+			foo = computeArea(t); area = foo[0]; inner = foo[1];
+			$("#areadisplay").text(area.toString())
+			
+			
+			$("#inner").text(inner.toString())
+			var multiplier = parseFloat($(".multiplier-input").val())
+			var imultiplier = (1 + 0.05 * inner)
+			var fmultiplier = (1 + 0.05 * inner)*multiplier
+			var finalarea = area*fmultiplier
+
+			$("#inner-multiplier").text(imultiplier.toString())
+			$("#multiplier").text(fmultiplier.toString())
+			$("#fareadisplay").text(finalarea.toString())
+			$("#finalscore").text(Math.round(finalarea/10000))
+	
+			
+		});
+		
+		clearButton.on("click", function(e){
+			clearMarkers();
+		});
+		
+		
+		
+		map.on("load", function () {
+		  //Image: An image is loaded and added to the map.
+		  map.loadImage("https://i.imgur.com/MK4NUzI.png", function(error, image) {
+			  if (error) throw error;
+			  map.addImage("custom-marker", image);
+			  //Style layer: A style layer ties together the source and image and specifies how they are displayed on the map.
+			  map.addLayer({
+				id: "markers",
+				type: "symbol",
+				//Source: A data source specifies the geographic coordinate where the image marker gets placed.
+				source: {
+				  type: "geojson",
+				  data: {
+					type: "FeatureCollection",
+					features:[{"type":"Feature","geometry":{"type":"Point","coordinates":["103.81786111111111","1.2543333333333333"]}}]}
+				},
+				layout: {
+				  "icon-image": "custom-marker",
+					"icon-allow-overlap":true
+					
+				}
+			  });
+			});
+		});
+		
+		map.on('click', 'markers', function (e) {
+			var coordinates = e.features[0].geometry.coordinates.slice();
+			var description = e.features[0].properties.description;
+
+			// Ensure that if the map is zoomed out such that multiple
+			// copies of the feature are visible, the popup appears
+			// over the copy being pointed to.
+			while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+				coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+			}
+
+			new mapboxgl.Popup()
+				.setLngLat(coordinates)
+				.setHTML(description)
+				.addTo(map);
+		});
+
+		// Change the cursor to a pointer when the mouse is over the places layer.
+		map.on('mouseenter', 'markers', function () {
+			map.getCanvas().style.cursor = 'pointer';
+		});
+
+		// Change it back to a pointer when it leaves.
+		map.on('mouseleave', 'markers', function () {
+			map.getCanvas().style.cursor = '';
+		});
+		
+	});
+
+</script>
+	
+<div class='col-md-3' id='sidebar'>
+	Outposts: <input type="text", value="5, 7, 10, 11, 16, 18", class="cp-input" /><br>
+	Multiplier: <input type="text", value="1.0", class="multiplier-input" /><br>
+	<input type="button", value="Submit", class="submit" />
+	<input type="button", value="Clear", class="clear" /><br>
+	<p>Base Area: <span id="areadisplay"></span></p>	
+	<p>Number of inner outposts: <span id="inner"></span> (Multiplier = <span id="inner-multiplier"></span>x)</p>	
+	<p>Total Multiplier: <span id="multiplier"></span>x</p>
+	<p>Final Area: <span id="fareadisplay"></span></p>
+	<p>Final Score: <span id="finalscore"></span></p>
+</div>
+	
+<div class='col-md-9' id='map-container'><div id='map'></div></div>
+
+<script>
+	
+</script>
+
+
+</body>
+</html>
